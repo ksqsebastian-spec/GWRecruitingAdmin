@@ -16,8 +16,9 @@ export default function DashboardPage() {
   const [empfehlungen, setEmpfehlungen] = useState<Empfehlung[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     offen: 0,
-    erledigt: 0,
-    total_provision: 0,
+    eingestellt: 0,
+    probezeit_bestanden: 0,
+    total_praemie: 0,
   });
   const [filter, setFilter] = useState<FilterOption>("alle");
   const [loading, setLoading] = useState(true);
@@ -44,9 +45,10 @@ export default function DashboardPage() {
   }, [fetchData]);
 
   const counts = {
-    alle: stats.offen + stats.erledigt + (empfehlungen.filter((e) => e.status === "ausgezahlt").length),
+    alle: empfehlungen.length,
     offen: stats.offen,
-    erledigt: stats.erledigt,
+    eingestellt: stats.eingestellt,
+    probezeit_bestanden: stats.probezeit_bestanden,
     ausgezahlt: empfehlungen.filter((e) => e.status === "ausgezahlt").length,
   };
 
@@ -66,10 +68,10 @@ export default function DashboardPage() {
       {/* Stat Cards */}
       <div style={{ display: "flex", gap: "12px" }}>
         <StatCard label="Offen" value={stats.offen} color="var(--orange)" />
-        <StatCard label="Erledigt" value={stats.erledigt} color="var(--green)" />
+        <StatCard label="Eingestellt" value={stats.eingestellt} color="var(--green)" />
         <StatCard
-          label="Provision"
-          value={formatCurrency(stats.total_provision)}
+          label="Prämie"
+          value={formatCurrency(stats.total_praemie)}
           color="var(--navy)"
         />
       </div>

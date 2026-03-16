@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Search, Archive, ArrowLeft } from "lucide-react";
-import type { EmpfehlungWithHandwerker } from "@/types";
+import type { EmpfehlungWithStelle } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 export default function ArchivPage() {
-  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithHandwerker[]>([]);
+  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithStelle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -24,7 +24,7 @@ export default function ArchivPage() {
       });
       if (search) params.set("search", search);
 
-      const res = await fetch(`/api/admin/handwerker?view=empfehlungen&${params}`);
+      const res = await fetch(`/api/admin/stellen?view=empfehlungen&${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setEmpfehlungen(data.data || []);
@@ -41,12 +41,12 @@ export default function ArchivPage() {
     return () => clearTimeout(debounce);
   }, [fetchData]);
 
-  async function handleMoveBack(emp: EmpfehlungWithHandwerker) {
+  async function handleMoveBack(emp: EmpfehlungWithStelle) {
     try {
       const res = await fetch("/api/admin/empfehlungen", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, status: "erledigt" }),
+        body: JSON.stringify({ id: emp.id, status: "probezeit_bestanden" }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -59,7 +59,7 @@ export default function ArchivPage() {
     }
   }
 
-  const totalProvision = empfehlungen.reduce((sum, e) => sum + (e.provision_betrag ?? 0), 0);
+  const totalPraemie = empfehlungen.reduce((sum, e) => sum + (e.praemie_betrag ?? 0), 0);
 
   const cellStyle = { padding: "14px 16px" };
 
@@ -72,7 +72,7 @@ export default function ArchivPage() {
 
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <StatCard label="Archiviert" value={total} bgColor="#eff6ff" color="#2563eb" />
-        <StatCard label="Ausgezahlt gesamt" value={formatCurrency(totalProvision)} bgColor="#f5f3ff" color="#7c3aed" />
+        <StatCard label="Ausgezahlt gesamt" value={formatCurrency(totalPraemie)} bgColor="#f5f3ff" color="#7c3aed" />
       </div>
 
       {/* Search */}
@@ -91,7 +91,7 @@ export default function ArchivPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", tableLayout: "auto" }}>
           <thead>
             <tr style={{ textAlign: "left", background: "linear-gradient(135deg, #050234 0%, #0a0654 100%)" }}>
-              {["Affiliate", "Kunde", "Ref", "Betrag", "Provision", "Ausgezahlt am", "Erstellt", "Aktionen"].map((h) => (
+              {["Empfehler", "Stelle", "Ref", "Prämie", "Ausgezahlt am", "Erstellt", "Aktionen"].map((h) => (
                 <th key={h} style={{ padding: "16px 16px", fontWeight: 700, color: "rgba(255,255,255,0.8)", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.8px", whiteSpace: "nowrap" }}>
                   {h}
                 </th>
@@ -100,9 +100,9 @@ export default function ArchivPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Laden...</td></tr>
+              <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Laden...</td></tr>
             ) : empfehlungen.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Noch keine archivierten Einträge</td></tr>
+              <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Noch keine archivierten Einträge</td></tr>
             ) : (
               empfehlungen.map((emp, i) => (
                 <tr
@@ -112,42 +112,29 @@ export default function ArchivPage() {
                     backgroundColor: i % 2 === 0 ? "white" : "#f8f7f4",
                   }}
                 >
-                  {/* Affiliate */}
+                  {/* Empfehler */}
                   <td style={{ ...cellStyle, fontWeight: 600 }}>
                     {emp.empfehler_name}
                     <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400 }}>{emp.empfehler_email}</div>
                   </td>
 
-                  {/* Kunde */}
+                  {/* Stelle */}
                   <td style={cellStyle}>
-                    <div style={{ fontWeight: 600 }}>{emp.handwerker?.name ?? emp.kunde_name}</div>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{emp.handwerker?.email ?? ""}</div>
-                    {emp.handwerker?.telefon && (
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{emp.handwerker.telefon}</div>
-                    )}
+                    <div style={{ fontWeight: 600 }}>{emp.stelle?.title ?? "–"}</div>
                   </td>
 
                   {/* Ref */}
                   <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: "12px", color: "var(--blue)", fontWeight: 700 }}>{emp.ref_code}</td>
 
-                  {/* Betrag */}
-                  <td style={{ ...cellStyle, fontWeight: 700 }}>
-                    {emp.rechnungsbetrag ? (
-                      <span style={{ background: "linear-gradient(135deg, #f28900, #ff6b00)", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "13px" }}>
-                        {formatCurrency(emp.rechnungsbetrag)}
-                      </span>
-                    ) : "–"}
-                  </td>
-
-                  {/* Provision */}
+                  {/* Prämie */}
                   <td style={{ ...cellStyle, fontWeight: 700, color: "var(--green)" }}>
-                    {emp.provision_betrag ? formatCurrency(emp.provision_betrag) : "–"}
+                    {emp.praemie_betrag ? formatCurrency(emp.praemie_betrag) : "–"}
                   </td>
 
                   {/* Ausgezahlt am */}
                   <td style={{ ...cellStyle, whiteSpace: "nowrap" }}>
                     {emp.ausgezahlt_am ? (
-                      <span style={{ background: "#2563eb", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 700 }}>
+                      <span style={{ background: "#7C3AED", color: "white", padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 700 }}>
                         {formatDate(emp.ausgezahlt_am)}
                       </span>
                     ) : "–"}

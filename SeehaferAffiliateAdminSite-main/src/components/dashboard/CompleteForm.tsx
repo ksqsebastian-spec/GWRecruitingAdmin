@@ -2,34 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { formatCurrency, berechneProvision } from "@/lib/utils";
 
 interface CompleteFormProps {
   empfehlungId: string;
-  provisionProzent: number;
 }
 
-export function CompleteForm({
-  empfehlungId,
-  provisionProzent,
-}: CompleteFormProps) {
+export function CompleteForm({ empfehlungId }: CompleteFormProps) {
   const router = useRouter();
-  const [betrag, setBetrag] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const numericBetrag = parseFloat(betrag) || 0;
-  const provision = berechneProvision(numericBetrag, provisionProzent);
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (numericBetrag <= 0) {
-      setError("Bitte einen gültigen Betrag eingeben");
-      return;
-    }
-
     setLoading(true);
     setError("");
 
@@ -39,7 +24,7 @@ export function CompleteForm({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rechnungsbetrag: numericBetrag }),
+          body: JSON.stringify({}),
         }
       );
 
@@ -79,7 +64,7 @@ export function CompleteForm({
             marginBottom: "16px",
           }}
         >
-          Job erledigt?
+          Kandidat eingestellt?
         </h3>
       </div>
 
@@ -98,32 +83,6 @@ export function CompleteForm({
         </div>
       )}
 
-      <Input
-        label="Rechnungsbetrag (brutto)"
-        type="number"
-        step="0.01"
-        min="0.01"
-        max="999999"
-        value={betrag}
-        onChange={(e) => setBetrag(e.target.value)}
-        placeholder="€"
-        required
-      />
-
-      {numericBetrag > 0 && (
-        <div
-          style={{
-            fontSize: "14px",
-            color: "var(--green)",
-            fontWeight: 600,
-            textAlign: "center",
-          }}
-          aria-live="polite"
-        >
-          Provision: {provisionProzent}% = {formatCurrency(provision)}
-        </div>
-      )}
-
       <Button
         type="submit"
         loading={loading}
@@ -132,7 +91,7 @@ export function CompleteForm({
           backgroundColor: "var(--green)",
         }}
       >
-        ✓ Job erledigt
+        Als eingestellt markieren
       </Button>
     </form>
   );

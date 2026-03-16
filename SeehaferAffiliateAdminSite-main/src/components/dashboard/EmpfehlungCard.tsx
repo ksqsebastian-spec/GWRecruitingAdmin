@@ -18,7 +18,7 @@ export function EmpfehlungCard({ empfehlung, onClick }: EmpfehlungCardProps) {
   return (
     <button
       onClick={onClick}
-      aria-label={`Empfehlung ${empfehlung.kunde_name} – ${empfehlung.status}`}
+      aria-label={`Empfehlung ${empfehlung.kandidat_name} – ${empfehlung.status}`}
       style={{
         display: "flex",
         alignItems: "center",
@@ -44,7 +44,7 @@ export function EmpfehlungCard({ empfehlung, onClick }: EmpfehlungCardProps) {
         e.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      <Avatar name={empfehlung.kunde_name} status={empfehlung.status} />
+      <Avatar name={empfehlung.kandidat_name} status={empfehlung.status} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -56,10 +56,10 @@ export function EmpfehlungCard({ empfehlung, onClick }: EmpfehlungCardProps) {
             whiteSpace: "nowrap",
           }}
         >
-          {empfehlung.kunde_name}
+          {empfehlung.kandidat_name}
         </div>
         <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-          Affiliate: {empfehlung.empfehler_name}
+          Empfehler: {empfehlung.empfehler_name}
         </div>
       </div>
       <div

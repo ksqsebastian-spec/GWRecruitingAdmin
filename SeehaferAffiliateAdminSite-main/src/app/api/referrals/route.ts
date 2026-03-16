@@ -3,10 +3,12 @@ import { empfehlungCreateSchema, paginationSchema } from "@/lib/validators";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// GET /api/referrals — list empfehlungen (handwerker sees own via query)
+const VALID_STATUSES = ["offen", "eingestellt", "probezeit_bestanden", "ausgezahlt"] as const;
+
+// GET /api/referrals — list empfehlungen
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
-  const handwerkerId = searchParams.get("handwerker_id");
+  const stelleId = searchParams.get("stelle_id");
 
   const pagination = paginationSchema.safeParse({
     page: searchParams.get("page"),
@@ -26,11 +28,11 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false })
     .range(offset, offset + pageSize - 1);
 
-  if (handwerkerId) {
-    query = query.eq("handwerker_id", handwerkerId);
+  if (stelleId) {
+    query = query.eq("stelle_id", stelleId);
   }
 
-  if (status && ["offen", "erledigt", "ausgezahlt"].includes(status)) {
+  if (status && VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
     query = query.eq("status", status);
   }
 
@@ -104,11 +106,20 @@ export async function POST(request: NextRequest) {
     refCode = generated as string;
   }
 
+  // Fetch global default praemie
+  const { data: settings } = await adminClient
+    .from("app_settings")
+    .select("value")
+    .eq("key", "praemie_betrag_default")
+    .single();
+  const praemieBetrag = Number(settings?.value ?? 1000);
+
   const { data, error } = await adminClient
     .from("empfehlungen")
     .insert({
       ...parsed.data,
       ref_code: refCode,
+      praemie_betrag: praemieBetrag,
     })
     .select()
     .single();

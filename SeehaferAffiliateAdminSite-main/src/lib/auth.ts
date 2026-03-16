@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { User } from "@supabase/supabase-js";
 
 interface AuthResult {
   user: User;
-  handwerkerId: string;
   isAdmin: boolean;
 }
 
@@ -29,24 +27,8 @@ export async function requireAuth(): Promise<AuthResult | NextResponse> {
   // SECURITY: Admin flag from app_metadata (not user_metadata)
   const isAdmin = user.app_metadata?.is_admin === true;
 
-  // Get handwerker record for this user
-  const adminClient = createAdminClient();
-  const { data: handwerker } = await adminClient
-    .from("handwerker")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  if (!handwerker && !isAdmin) {
-    return NextResponse.json(
-      { error: "Kein Handwerker-Profil gefunden" },
-      { status: 403 }
-    );
-  }
-
   return {
     user,
-    handwerkerId: handwerker?.id ?? "",
     isAdmin,
   };
 }

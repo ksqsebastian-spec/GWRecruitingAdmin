@@ -13,7 +13,8 @@ interface FilterTabsProps {
 const tabs: { key: FilterOption; label: string }[] = [
   { key: "alle", label: "Alle" },
   { key: "offen", label: "Offen" },
-  { key: "erledigt", label: "Erledigt" },
+  { key: "eingestellt", label: "Eingestellt" },
+  { key: "probezeit_bestanden", label: "Probezeit" },
   { key: "ausgezahlt", label: "Ausgezahlt" },
 ];
 

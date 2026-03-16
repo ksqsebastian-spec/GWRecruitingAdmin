@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handwerkerCreateSchema, handwerkerUpdateSchema, paginationSchema } from "@/lib/validators";
+import { stelleCreateSchema, stelleUpdateSchema, paginationSchema } from "@/lib/validators";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 
-// GET /api/admin/handwerker — list handwerker or empfehlungen (admin)
+const VALID_STATUSES = ["offen", "eingestellt", "probezeit_bestanden", "ausgezahlt"] as const;
+
+// GET /api/admin/stellen — list stellen or empfehlungen (admin)
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const view = searchParams.get("view");
   const adminClient = createAdminClient();
 
-  // View: all empfehlungen with handwerker info (for admin dashboard / payouts)
+  // View: all empfehlungen with stelle info (for admin dashboard / payouts)
   if (view === "empfehlungen") {
     const pagination = paginationSchema.safeParse({
       page: searchParams.get("page"),
@@ -23,19 +25,19 @@ export async function GET(request: NextRequest) {
 
     let query = adminClient
       .from("empfehlungen")
-      .select("*, handwerker:handwerker_id(id, name, email, telefon, provision_prozent)", {
+      .select("*, stelle:stelle_id(id, title)", {
         count: "exact",
       })
       .order("created_at", { ascending: false })
       .range(offset, offset + pageSize - 1);
 
-    if (status && ["offen", "erledigt", "ausgezahlt"].includes(status)) {
+    if (status && VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
       query = query.eq("status", status);
     }
 
     if (search) {
       query = query.or(
-        `kunde_name.ilike.%${search}%,empfehler_name.ilike.%${search}%,ref_code.ilike.%${search}%`
+        `kandidat_name.ilike.%${search}%,empfehler_name.ilike.%${search}%,ref_code.ilike.%${search}%`
       );
     }
 
@@ -56,15 +58,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Default: list all handwerker
+  // Default: list all stellen
   const { data, error } = await adminClient
-    .from("handwerker")
+    .from("stellen")
     .select("*")
-    .order("name");
+    .order("title");
 
   if (error) {
     return NextResponse.json(
-      { error: "Handwerker konnten nicht geladen werden", detail: error.message },
+      { error: "Stellen konnten nicht geladen werden", detail: error.message },
       { status: 500 }
     );
   }
@@ -72,7 +74,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data: data || [] });
 }
 
-// POST /api/admin/handwerker — create new handwerker
+// POST /api/admin/stellen — create new stelle
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const parsed = handwerkerCreateSchema.safeParse(body);
+  const parsed = stelleCreateSchema.safeParse(body);
   if (!parsed.success) {
     const fieldErrors = parsed.error.issues.map(
       (issue) => `${issue.path.join(".")}: ${issue.message}`
@@ -97,49 +99,19 @@ export async function POST(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Create Supabase Auth user for this handwerker (Magic Link based)
-  const { data: authUser, error: authError } =
-    await adminClient.auth.admin.createUser({
-      email: parsed.data.email,
-      email_confirm: true,
-      app_metadata: { is_admin: false },
-    });
-
-  if (authError) {
-    if (authError.message.includes("already")) {
-      return NextResponse.json(
-        { error: "E-Mail-Adresse bereits registriert" },
-        { status: 409 }
-      );
-    }
-    return NextResponse.json(
-      {
-        error: "Auth-Benutzer konnte nicht erstellt werden",
-        detail: authError.message,
-      },
-      { status: 500 }
-    );
-  }
-
-  // Insert handwerker record
   const { data, error } = await adminClient
-    .from("handwerker")
+    .from("stellen")
     .insert({
-      auth_user_id: authUser.user.id,
-      name: parsed.data.name,
-      email: parsed.data.email,
-      telefon: parsed.data.telefon || null,
-      provision_prozent: parsed.data.provision_prozent,
+      title: parsed.data.title,
+      description: parsed.data.description || null,
     })
     .select()
     .single();
 
   if (error) {
-    // Clean up auth user if DB insert fails
-    await adminClient.auth.admin.deleteUser(authUser.user.id);
     return NextResponse.json(
       {
-        error: "Handwerker konnte nicht in DB erstellt werden",
+        error: "Stelle konnte nicht erstellt werden",
         detail: error.message,
       },
       { status: 500 }
@@ -148,17 +120,17 @@ export async function POST(request: NextRequest) {
 
   await logAudit({
     userId: "admin",
-    action: "handwerker.created",
-    targetType: "handwerker",
+    action: "stelle.created",
+    targetType: "stelle",
     targetId: data.id,
-    details: { name: parsed.data.name, email: parsed.data.email },
+    details: { title: parsed.data.title },
     ipAddress: request.headers.get("x-forwarded-for"),
   });
 
   return NextResponse.json(data, { status: 201 });
 }
 
-// PATCH /api/admin/handwerker — update handwerker
+// PATCH /api/admin/stellen — update stelle
 export async function PATCH(request: NextRequest) {
   let body: unknown;
   try {
@@ -175,7 +147,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "ID erforderlich" }, { status: 400 });
   }
 
-  const parsed = handwerkerUpdateSchema.safeParse(updateData);
+  const parsed = stelleUpdateSchema.safeParse(updateData);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validierungsfehler", details: parsed.error.format() },
@@ -185,15 +157,14 @@ export async function PATCH(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Get current values for audit trail
   const { data: before } = await adminClient
-    .from("handwerker")
+    .from("stellen")
     .select("*")
     .eq("id", id)
     .single();
 
   const { data, error } = await adminClient
-    .from("handwerker")
+    .from("stellen")
     .update(parsed.data)
     .eq("id", id)
     .select()
@@ -201,15 +172,15 @@ export async function PATCH(request: NextRequest) {
 
   if (error || !data) {
     return NextResponse.json(
-      { error: "Handwerker konnte nicht aktualisiert werden" },
+      { error: "Stelle konnte nicht aktualisiert werden" },
       { status: 500 }
     );
   }
 
   await logAudit({
     userId: "admin",
-    action: "handwerker.updated",
-    targetType: "handwerker",
+    action: "stelle.updated",
+    targetType: "stelle",
     targetId: id,
     details: {
       before: before || {},
@@ -221,7 +192,7 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json(data);
 }
 
-// DELETE /api/admin/handwerker — delete handwerker
+// DELETE /api/admin/stellen — delete stelle
 export async function DELETE(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const id = searchParams.get("id");
@@ -232,44 +203,37 @@ export async function DELETE(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Get handwerker to find auth_user_id
-  const { data: hw, error: fetchError } = await adminClient
-    .from("handwerker")
-    .select("auth_user_id, name")
+  const { data: stelle, error: fetchError } = await adminClient
+    .from("stellen")
+    .select("title")
     .eq("id", id)
     .single();
 
-  if (fetchError || !hw) {
+  if (fetchError || !stelle) {
     return NextResponse.json(
-      { error: "Handwerker nicht gefunden" },
+      { error: "Stelle nicht gefunden" },
       { status: 404 }
     );
   }
 
-  // Delete handwerker record
   const { error } = await adminClient
-    .from("handwerker")
+    .from("stellen")
     .delete()
     .eq("id", id);
 
   if (error) {
     return NextResponse.json(
-      { error: "Handwerker konnte nicht gelöscht werden", detail: error.message },
+      { error: "Stelle konnte nicht gelöscht werden", detail: error.message },
       { status: 500 }
     );
   }
 
-  // Clean up auth user
-  if (hw.auth_user_id) {
-    await adminClient.auth.admin.deleteUser(hw.auth_user_id);
-  }
-
   await logAudit({
     userId: "admin",
-    action: "handwerker.deleted",
-    targetType: "handwerker",
+    action: "stelle.deleted",
+    targetType: "stelle",
     targetId: id,
-    details: { name: hw.name },
+    details: { title: stelle.title },
     ipAddress: request.headers.get("x-forwarded-for"),
   });
 

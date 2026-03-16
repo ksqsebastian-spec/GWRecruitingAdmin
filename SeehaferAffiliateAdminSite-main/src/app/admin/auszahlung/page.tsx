@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Search, Copy, Check, X, CreditCard, ArrowLeft } from "lucide-react";
-import type { EmpfehlungWithHandwerker } from "@/types";
+import type { EmpfehlungWithStelle } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 export default function AuszahlungPage() {
-  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithHandwerker[]>([]);
+  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithStelle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -17,11 +17,9 @@ export default function AuszahlungPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
-  // Inline editing for provision and betrag
-  const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
-  const [editProvision, setEditProvision] = useState("");
-  const [editingBetragId, setEditingBetragId] = useState<string | null>(null);
-  const [editBetrag, setEditBetrag] = useState("");
+  // Inline editing for praemie
+  const [editingPraemieId, setEditingPraemieId] = useState<string | null>(null);
+  const [editPraemie, setEditPraemie] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -29,11 +27,11 @@ export default function AuszahlungPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: "25",
-        status: "erledigt",
+        status: "probezeit_bestanden",
       });
       if (search) params.set("search", search);
 
-      const res = await fetch(`/api/admin/handwerker?view=empfehlungen&${params}`);
+      const res = await fetch(`/api/admin/stellen?view=empfehlungen&${params}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setEmpfehlungen(data.data || []);
@@ -65,54 +63,33 @@ export default function AuszahlungPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
-  async function handleUpdateProvision(emp: EmpfehlungWithHandwerker) {
-    const value = parseFloat(editProvision);
+  async function handleUpdatePraemie(emp: EmpfehlungWithStelle) {
+    const value = parseFloat(editPraemie);
     if (isNaN(value) || value < 0) return;
 
     try {
       const res = await fetch("/api/admin/empfehlungen", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, provision_betrag: value }),
+        body: JSON.stringify({ id: emp.id, praemie_betrag: value }),
       });
       if (!res.ok) {
         alert("Fehler beim Aktualisieren");
         return;
       }
-      setEditingProvisionId(null);
+      setEditingPraemieId(null);
       fetchData();
     } catch {
       alert("Netzwerkfehler");
     }
   }
 
-  async function handleUpdateBetrag(emp: EmpfehlungWithHandwerker) {
-    const value = parseFloat(editBetrag);
-    if (isNaN(value) || value < 0) return;
-
+  async function handleMoveBack(emp: EmpfehlungWithStelle) {
     try {
       const res = await fetch("/api/admin/empfehlungen", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, rechnungsbetrag: value }),
-      });
-      if (!res.ok) {
-        alert("Fehler beim Aktualisieren");
-        return;
-      }
-      setEditingBetragId(null);
-      fetchData();
-    } catch {
-      alert("Netzwerkfehler");
-    }
-  }
-
-  async function handleMoveBack(emp: EmpfehlungWithHandwerker) {
-    try {
-      const res = await fetch("/api/admin/empfehlungen", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, status: "offen" }),
+        body: JSON.stringify({ id: emp.id, status: "eingestellt" }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -125,11 +102,10 @@ export default function AuszahlungPage() {
     }
   }
 
-  async function handleMarkAusgezahlt(emp: EmpfehlungWithHandwerker) {
+  async function handleMarkAusgezahlt(emp: EmpfehlungWithStelle) {
     if (!confirm(`"${emp.empfehler_name}" als ausgezahlt markieren und ins Archiv verschieben?`)) return;
 
     try {
-      // Set empfehlung to ausgezahlt
       const res = await fetch("/api/admin/empfehlungen", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -140,23 +116,13 @@ export default function AuszahlungPage() {
         alert(data.detail || data.error || "Fehler");
         return;
       }
-
-      // Set the associated handwerker to inactive (archived)
-      if (emp.handwerker?.id) {
-        await fetch("/api/admin/handwerker", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: emp.handwerker.id, active: false }),
-        });
-      }
-
       fetchData();
     } catch {
       alert("Netzwerkfehler");
     }
   }
 
-  const totalProvision = empfehlungen.reduce((sum, e) => sum + (e.provision_betrag ?? 0), 0);
+  const totalPraemie = empfehlungen.reduce((sum, e) => sum + (e.praemie_betrag ?? 0), 0);
 
   const cellStyle = { padding: "14px 16px" };
 
@@ -182,13 +148,13 @@ export default function AuszahlungPage() {
       <div>
         <h1 style={{ fontSize: "32px", fontWeight: 800, margin: 0, color: "var(--navy)" }}>Auszahlung</h1>
         <p style={{ color: "var(--text-muted)", fontSize: "15px", margin: "8px 0 0 0" }}>
-          Erledigte Affiliates zur Auszahlung. Daten einsehen, Provision anpassen, als ausgezahlt markieren.
+          Empfehlungen nach bestandener Probezeit. Prämie anpassen und als ausgezahlt markieren.
         </p>
       </div>
 
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <StatCard label="Zur Auszahlung" value={total} bgColor="#f0fdf4" color="#16a34a" />
-        <StatCard label="Gesamt Provision" value={formatCurrency(totalProvision)} bgColor="#f5f3ff" color="#7c3aed" />
+        <StatCard label="Gesamt Prämien" value={formatCurrency(totalPraemie)} bgColor="#f5f3ff" color="#7c3aed" />
       </div>
 
       {/* Search */}
@@ -207,7 +173,7 @@ export default function AuszahlungPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", tableLayout: "auto" }}>
           <thead>
             <tr style={{ textAlign: "left", background: "linear-gradient(135deg, #050234 0%, #0a0654 100%)" }}>
-              {["Affiliate", "Kunde", "Ref", "Betrag", "Provision", "Datum", "Aktionen"].map((h) => (
+              {["Empfehler", "Stelle", "Ref", "Prämie", "Datum", "Aktionen"].map((h) => (
                 <th key={h} style={{ padding: "16px 16px", fontWeight: 700, color: "rgba(255,255,255,0.8)", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.8px", whiteSpace: "nowrap" }}>
                   {h}
                 </th>
@@ -216,9 +182,9 @@ export default function AuszahlungPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Laden...</td></tr>
+              <tr><td colSpan={6} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Laden...</td></tr>
             ) : empfehlungen.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Keine Einträge zur Auszahlung</td></tr>
+              <tr><td colSpan={6} style={{ padding: "48px", textAlign: "center", color: "var(--text-muted)", fontSize: "15px" }}>Keine Einträge zur Auszahlung</td></tr>
             ) : (
               empfehlungen.map((emp, i) => (
                 <>
@@ -237,79 +203,41 @@ export default function AuszahlungPage() {
                       <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400 }}>{emp.empfehler_email}</div>
                     </td>
                     <td style={cellStyle}>
-                      {emp.handwerker?.name ?? "–"}
-                      {emp.handwerker?.telefon && (
-                        <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{emp.handwerker.telefon}</div>
-                      )}
+                      {emp.stelle?.title ?? "–"}
                     </td>
                     <td style={{ ...cellStyle, fontFamily: "monospace", fontSize: "12px", color: "var(--blue)", fontWeight: 700 }}>{emp.ref_code}</td>
 
-                    {/* Betrag */}
+                    {/* Prämie (editable) */}
                     <td style={cellStyle} onClick={(e) => e.stopPropagation()}>
-                      {editingBetragId === emp.id ? (
+                      {editingPraemieId === emp.id ? (
                         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                           <input
-                            type="number" step="0.01" min="0" value={editBetrag}
-                            onChange={(e) => setEditBetrag(e.target.value)}
-                            style={{ width: "90px", padding: "8px 10px", border: "2px solid var(--orange)", borderRadius: "10px", fontSize: "14px", fontWeight: 700 }}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleUpdateBetrag(emp); if (e.key === "Escape") setEditingBetragId(null); }}
-                            autoFocus
-                          />
-                          <button onClick={() => handleUpdateBetrag(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                            <Check size={14} color="white" />
-                          </button>
-                          <button onClick={() => setEditingBetragId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                            <X size={14} color="var(--text-muted)" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setEditingBetragId(emp.id); setEditBetrag(emp.rechnungsbetrag ? String(emp.rechnungsbetrag) : ""); }}
-                          style={{
-                            background: emp.rechnungsbetrag ? "linear-gradient(135deg, #f28900, #ff6b00)" : "var(--border)",
-                            border: "none", cursor: "pointer", fontWeight: 700,
-                            color: emp.rechnungsbetrag ? "white" : "var(--text-muted)",
-                            padding: "6px 16px", borderRadius: "16px", fontSize: "13px",
-                            boxShadow: emp.rechnungsbetrag ? "0 2px 8px rgba(242,137,0,0.3)" : "none",
-                          }}
-                          title="Klicke um Betrag einzutragen"
-                        >
-                          {emp.rechnungsbetrag ? formatCurrency(emp.rechnungsbetrag) : "–"}
-                        </button>
-                      )}
-                    </td>
-
-                    {/* Provision (editable) */}
-                    <td style={cellStyle} onClick={(e) => e.stopPropagation()}>
-                      {editingProvisionId === emp.id ? (
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                          <input
-                            type="number" step="0.01" min="0" value={editProvision}
-                            onChange={(e) => setEditProvision(e.target.value)}
+                            type="number" step="0.01" min="0" value={editPraemie}
+                            onChange={(e) => setEditPraemie(e.target.value)}
                             style={{ width: "90px", padding: "8px 10px", border: "2px solid var(--green)", borderRadius: "10px", fontSize: "14px", fontWeight: 700 }}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleUpdateProvision(emp); if (e.key === "Escape") setEditingProvisionId(null); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleUpdatePraemie(emp); if (e.key === "Escape") setEditingPraemieId(null); }}
                             autoFocus
                           />
-                          <button onClick={() => handleUpdateProvision(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                          <button onClick={() => handleUpdatePraemie(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
                             <Check size={14} color="white" />
                           </button>
-                          <button onClick={() => setEditingProvisionId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                          <button onClick={() => setEditingPraemieId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "8px", padding: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
                             <X size={14} color="var(--text-muted)" />
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => { setEditingProvisionId(emp.id); setEditProvision(emp.provision_betrag ? String(emp.provision_betrag) : ""); }}
+                          onClick={() => { setEditingPraemieId(emp.id); setEditPraemie(emp.praemie_betrag ? String(emp.praemie_betrag) : ""); }}
                           style={{
-                            background: emp.provision_betrag ? "#16a34a" : "var(--border)",
+                            background: emp.praemie_betrag ? "#16a34a" : "var(--border)",
                             border: "none", cursor: "pointer", fontWeight: 700,
-                            color: emp.provision_betrag ? "white" : "var(--text-muted)",
+                            color: emp.praemie_betrag ? "white" : "var(--text-muted)",
                             padding: "6px 16px", borderRadius: "16px", fontSize: "13px",
-                            boxShadow: emp.provision_betrag ? "0 2px 8px rgba(22,163,74,0.3)" : "none",
+                            boxShadow: emp.praemie_betrag ? "0 2px 8px rgba(22,163,74,0.3)" : "none",
                           }}
-                          title="Klicke um Provision anzupassen"
+                          title="Klicke um Prämie anzupassen"
                         >
-                          {emp.provision_betrag ? formatCurrency(emp.provision_betrag) : "–"}
+                          {emp.praemie_betrag ? formatCurrency(emp.praemie_betrag) : "–"}
                         </button>
                       )}
                     </td>
@@ -326,17 +254,17 @@ export default function AuszahlungPage() {
                             color: "white", fontWeight: 700, fontSize: "12px", display: "flex", alignItems: "center", gap: "4px",
                             boxShadow: "0 2px 8px rgba(234,88,12,0.3)",
                           }}
-                          title="Zurück zu Affiliate (offen)"
+                          title="Zurück zu Eingestellt"
                         >
                           <ArrowLeft size={14} /> Zurück
                         </button>
                         <button
                           onClick={() => handleMarkAusgezahlt(emp)}
                           style={{
-                            background: "linear-gradient(135deg, #16a34a, #15803d)",
+                            background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
                             border: "none", borderRadius: "10px", padding: "8px 16px", cursor: "pointer",
                             color: "white", fontWeight: 700, fontSize: "12px", display: "flex", alignItems: "center", gap: "6px",
-                            boxShadow: "0 2px 8px rgba(22,163,74,0.3)",
+                            boxShadow: "0 2px 8px rgba(124,58,237,0.3)",
                           }}
                         >
                           <CreditCard size={14} /> Ausgezahlt
@@ -348,20 +276,20 @@ export default function AuszahlungPage() {
                   {/* Expanded payment details */}
                   {expandedId === emp.id && (
                     <tr key={`${emp.id}-detail`} style={{ borderBottom: "1px solid var(--border)", backgroundColor: "rgba(37,99,235,0.04)" }}>
-                      <td colSpan={7} style={{ padding: "0 16px 16px 16px" }}>
+                      <td colSpan={6} style={{ padding: "0 16px 16px 16px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", maxWidth: "700px" }}>
                           <div style={{ gridColumn: "1 / -1", fontSize: "12px", fontWeight: 700, color: "var(--blue)", textTransform: "uppercase", letterSpacing: "1px", padding: "4px 0" }}>
                             Zahlungsdaten
                           </div>
-                          <CopyField label="PayPal" value={emp.empfehler_email} copyKey={`${emp.id}-paypal`} />
+                          <CopyField label="E-Mail" value={emp.empfehler_email} copyKey={`${emp.id}-email`} />
                           <CopyField label="IBAN" value={emp.iban} copyKey={`${emp.id}-iban`} />
                           <CopyField label="BIC" value={emp.bic} copyKey={`${emp.id}-bic`} />
                           <CopyField label="Inhaber" value={emp.kontoinhaber} copyKey={`${emp.id}-inhaber`} />
                           <CopyField label="Bank" value={emp.bank_name} copyKey={`${emp.id}-bank`} />
-                          <CopyField label="Provision" value={emp.provision_betrag ? formatCurrency(emp.provision_betrag) : null} copyKey={`${emp.id}-prov`} />
+                          <CopyField label="Prämie" value={emp.praemie_betrag ? formatCurrency(emp.praemie_betrag) : null} copyKey={`${emp.id}-praemie`} />
                           {(!emp.iban && !emp.bic && !emp.kontoinhaber && !emp.bank_name) && (
                             <div style={{ gridColumn: "1 / -1", color: "var(--text-muted)", fontSize: "13px", fontStyle: "italic" }}>
-                              Keine Bankdaten hinterlegt. PayPal-E-Mail wird oben angezeigt.
+                              Keine Bankdaten hinterlegt. E-Mail wird oben angezeigt.
                             </div>
                           )}
                         </div>

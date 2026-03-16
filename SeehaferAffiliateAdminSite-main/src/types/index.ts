@@ -1,12 +1,9 @@
-export type EmpfehlungStatus = "offen" | "erledigt" | "ausgezahlt";
+export type EmpfehlungStatus = "offen" | "eingestellt" | "probezeit_bestanden" | "ausgezahlt";
 
-export interface Handwerker {
+export interface Stelle {
   id: string;
-  auth_user_id: string;
-  name: string;
-  email: string;
-  telefon: string | null;
-  provision_prozent: number;
+  title: string;
+  description: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -16,13 +13,13 @@ export interface Empfehlung {
   id: string;
   empfehler_name: string;
   empfehler_email: string;
-  kunde_name: string;
-  kunde_kontakt: string | null;
-  handwerker_id: string;
+  kandidat_name: string;
+  kandidat_kontakt: string | null;
+  stelle_id: string;
+  position: string | null;
   ref_code: string;
   status: EmpfehlungStatus;
-  rechnungsbetrag: number | null;
-  provision_betrag: number | null;
+  praemie_betrag: number | null;
   ausgezahlt_am: string | null;
   iban: string | null;
   bic: string | null;
@@ -32,8 +29,8 @@ export interface Empfehlung {
   updated_at: string;
 }
 
-export interface EmpfehlungWithHandwerker extends Empfehlung {
-  handwerker: Pick<Handwerker, "id" | "name" | "email" | "telefon" | "provision_prozent">;
+export interface EmpfehlungWithStelle extends Empfehlung {
+  stelle: Pick<Stelle, "id" | "title"> | null;
 }
 
 export interface AuditLogEntry {
@@ -49,8 +46,9 @@ export interface AuditLogEntry {
 
 export interface DashboardStats {
   offen: number;
-  erledigt: number;
-  total_provision: number;
+  eingestellt: number;
+  probezeit_bestanden: number;
+  total_praemie: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -65,4 +63,8 @@ export interface ApiError {
   error: string;
   code?: string;
   details?: Record<string, string[]>;
+}
+
+export interface AppSettings {
+  praemie_betrag_default: number;
 }

@@ -1,36 +1,30 @@
 import { z } from "zod/v4";
 
 export const empfehlungCreateSchema = z.object({
-  kunde_name: z.string().min(1, "Name ist erforderlich").max(120),
-  kunde_kontakt: z.string().max(200).optional(),
+  kandidat_name: z.string().min(1, "Name ist erforderlich").max(120),
+  kandidat_kontakt: z.string().max(200).optional(),
   empfehler_name: z.string().min(1, "Name ist erforderlich").max(120),
   empfehler_email: z.email("Ungültige E-Mail-Adresse").max(200),
-  handwerker_id: z.string().uuid("Ungültige Partner-ID"),
+  stelle_id: z.string().uuid("Ungültige Stellen-ID"),
+  position: z.string().max(200).optional(),
   ref_code: z
     .string()
     .regex(/^#SEE-\d{4}-[A-Z0-9]{4,6}$/, "Ungültiges Ref-Code Format")
     .optional(),
 });
 
-export const empfehlungCompleteSchema = z.object({
-  rechnungsbetrag: z
-    .number()
-    .positive("Betrag muss positiv sein")
-    .max(999999, "Betrag zu hoch"),
+export const empfehlungStatusUpdateSchema = z.object({
+  status: z.enum(["offen", "eingestellt", "probezeit_bestanden", "ausgezahlt"]),
 });
 
-export const handwerkerCreateSchema = z.object({
-  name: z.string().min(1).max(120),
-  email: z.email().max(200),
-  telefon: z.string().max(50).optional(),
-  provision_prozent: z.number().min(0).max(50),
+export const stelleCreateSchema = z.object({
+  title: z.string().min(1, "Titel ist erforderlich").max(200),
+  description: z.string().max(2000).optional(),
 });
 
-export const handwerkerUpdateSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  email: z.email().max(200).optional(),
-  telefon: z.string().max(50).optional().nullable(),
-  provision_prozent: z.number().min(0).max(50).optional(),
+export const stelleUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional().nullable(),
   active: z.boolean().optional(),
 });
 

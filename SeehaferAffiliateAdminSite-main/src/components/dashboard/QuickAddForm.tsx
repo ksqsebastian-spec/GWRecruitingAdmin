@@ -19,10 +19,11 @@ export function QuickAddForm() {
 
     const formData = new FormData(e.currentTarget);
     const body = {
-      kunde_name: formData.get("kunde_name"),
-      kunde_kontakt: formData.get("kunde_kontakt") || undefined,
+      kandidat_name: formData.get("kandidat_name"),
+      kandidat_kontakt: formData.get("kandidat_kontakt") || undefined,
       empfehler_name: formData.get("empfehler_name"),
       empfehler_email: formData.get("empfehler_email"),
+      position: formData.get("position") || undefined,
       ref_code: formData.get("ref_code") || undefined,
     };
 
@@ -83,24 +84,24 @@ export function QuickAddForm() {
       )}
 
       <Input
-        label="Kunde"
-        name="kunde_name"
+        label="Kandidat"
+        name="kandidat_name"
         required
         maxLength={120}
-        error={errors.kunde_name}
+        error={errors.kandidat_name}
         autoComplete="off"
       />
 
       <Input
         label="Kontakt (Email/Telefon)"
-        name="kunde_kontakt"
+        name="kandidat_kontakt"
         maxLength={200}
-        error={errors.kunde_kontakt}
+        error={errors.kandidat_kontakt}
         autoComplete="off"
       />
 
       <Input
-        label="Affiliate Name"
+        label="Empfehler Name"
         name="empfehler_name"
         required
         maxLength={120}
@@ -115,6 +116,14 @@ export function QuickAddForm() {
         required
         maxLength={200}
         error={errors.empfehler_email}
+        autoComplete="off"
+      />
+
+      <Input
+        label="Position (optional)"
+        name="position"
+        maxLength={200}
+        error={errors.position}
         autoComplete="off"
       />
 

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { CompleteForm } from "@/components/dashboard/CompleteForm";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import type { Empfehlung, Handwerker } from "@/types";
+import type { Empfehlung } from "@/types";
 
 export default async function EmpfehlungDetailPage({
   params,
@@ -21,7 +21,7 @@ export default async function EmpfehlungDetailPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/");
 
-  // Fetch the empfehlung — RLS ensures only own data is returned
+  // Fetch the empfehlung
   const { data: empfehlung, error } = await supabase
     .from("empfehlungen")
     .select("*")
@@ -29,15 +29,6 @@ export default async function EmpfehlungDetailPage({
     .single<Empfehlung>();
 
   if (error || !empfehlung) redirect("/dashboard");
-
-  // Get handwerker for provision percentage
-  const { data: handwerker } = await supabase
-    .from("handwerker")
-    .select("provision_prozent")
-    .eq("id", empfehlung.handwerker_id)
-    .single<Pick<Handwerker, "provision_prozent">>();
-
-  const provisionProzent = handwerker?.provision_prozent ?? 5;
 
   return (
     <div className="animate-fadeIn" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -64,10 +55,10 @@ export default async function EmpfehlungDetailPage({
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <div>
             <h2 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>
-              {empfehlung.kunde_name}
+              {empfehlung.kandidat_name}
             </h2>
             <p style={{ color: "var(--text-muted)", fontSize: "14px", margin: "4px 0 0" }}>
-              Affiliate: {empfehlung.empfehler_name}
+              Empfehler: {empfehlung.empfehler_name}
             </p>
             <p style={{ color: "var(--text-muted)", fontSize: "13px", margin: "2px 0 0" }}>
               {empfehlung.empfehler_email}
@@ -83,10 +74,16 @@ export default async function EmpfehlungDetailPage({
               <span style={{ color: "var(--text-muted)" }}>Erfasst: </span>
               {formatDate(empfehlung.created_at)}
             </div>
-            {empfehlung.kunde_kontakt && (
+            {empfehlung.kandidat_kontakt && (
               <div>
                 <span style={{ color: "var(--text-muted)" }}>Kontakt: </span>
-                {empfehlung.kunde_kontakt}
+                {empfehlung.kandidat_kontakt}
+              </div>
+            )}
+            {empfehlung.position && (
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>Position: </span>
+                {empfehlung.position}
               </div>
             )}
           </div>
@@ -96,7 +93,7 @@ export default async function EmpfehlungDetailPage({
             <Badge status={empfehlung.status} />
           </div>
 
-          {empfehlung.status !== "offen" && empfehlung.rechnungsbetrag && (
+          {empfehlung.praemie_betrag && empfehlung.status !== "offen" && (
             <div
               style={{
                 padding: "12px",
@@ -105,12 +102,8 @@ export default async function EmpfehlungDetailPage({
                 fontSize: "13px",
               }}
             >
-              <div>
-                Rechnungsbetrag: {formatCurrency(empfehlung.rechnungsbetrag)}
-              </div>
               <div style={{ fontWeight: 600, color: "var(--green)" }}>
-                Provision: {provisionProzent}% ={" "}
-                {formatCurrency(empfehlung.provision_betrag ?? 0)}
+                Prämie: {formatCurrency(empfehlung.praemie_betrag)}
               </div>
             </div>
           )}
@@ -119,7 +112,7 @@ export default async function EmpfehlungDetailPage({
             <div
               style={{
                 padding: "12px",
-                backgroundColor: "var(--blue-bg)",
+                backgroundColor: "#F3F0FF",
                 borderRadius: "var(--radius-sm)",
                 fontSize: "13px",
               }}
@@ -129,10 +122,7 @@ export default async function EmpfehlungDetailPage({
           )}
 
           {empfehlung.status === "offen" && (
-            <CompleteForm
-              empfehlungId={empfehlung.id}
-              provisionProzent={provisionProzent}
-            />
+            <CompleteForm empfehlungId={empfehlung.id} />
           )}
         </div>
       </Card>
