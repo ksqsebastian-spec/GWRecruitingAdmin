@@ -2,50 +2,51 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Search, ChevronDown, ChevronRight, ArrowRight, Check, X, Users } from "lucide-react";
-import type { EmpfehlungWithHandwerker, EmpfehlungStatus, Handwerker } from "@/types";
+import type { EmpfehlungWithStelle, EmpfehlungStatus, Stelle } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
 const STATUS_DOT_COLORS: Record<EmpfehlungStatus, string> = {
   offen: "#ea580c",
-  erledigt: "#16a34a",
-  ausgezahlt: "#2563eb",
+  eingestellt: "#16a34a",
+  probezeit_bestanden: "#2563eb",
+  ausgezahlt: "#7C3AED",
 };
 
 const STATUS_LABELS: Record<EmpfehlungStatus, string> = {
   offen: "Offen",
-  erledigt: "Erledigt",
+  eingestellt: "Eingestellt",
+  probezeit_bestanden: "Probezeit bestanden",
   ausgezahlt: "Ausgezahlt",
 };
 
 const NEXT_STATUS: Record<EmpfehlungStatus, { label: string; target: EmpfehlungStatus; color: string } | null> = {
-  offen: { label: "Zur Auszahlung", target: "erledigt", color: "#16a34a" },
-  erledigt: { label: "Ausgezahlt", target: "ausgezahlt", color: "#2563eb" },
+  offen: { label: "Eingestellt", target: "eingestellt", color: "#16a34a" },
+  eingestellt: { label: "Probezeit bestanden", target: "probezeit_bestanden", color: "#2563eb" },
+  probezeit_bestanden: { label: "Ausgezahlt", target: "ausgezahlt", color: "#7C3AED" },
   ausgezahlt: null,
 };
 
-interface KundeGroup {
-  handwerker: Pick<Handwerker, "id" | "name" | "email" | "telefon" | "provision_prozent">;
-  empfehlungen: EmpfehlungWithHandwerker[];
+interface StelleGroup {
+  stelle: Pick<Stelle, "id" | "title"> | null;
+  empfehlungen: EmpfehlungWithStelle[];
 }
 
 export default function AdminDashboardPage() {
-  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithHandwerker[]>([]);
+  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithStelle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expandedKunden, setExpandedKunden] = useState<Set<string>>(new Set());
 
   // Inline editing
-  const [editingBetragId, setEditingBetragId] = useState<string | null>(null);
-  const [editBetrag, setEditBetrag] = useState("");
-  const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
-  const [editProvision, setEditProvision] = useState("");
+  const [editingPraemieId, setEditingPraemieId] = useState<string | null>(null);
+  const [editPraemie, setEditPraemie] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/handwerker?view=empfehlungen&pageSize=200");
+      const res = await fetch("/api/admin/stellen?view=empfehlungen&pageSize=200");
       if (!res.ok) throw new Error();
       const data = await res.json();
       setEmpfehlungen(data.data || []);
@@ -60,32 +61,32 @@ export default function AdminDashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Group empfehlungen by Kunde (handwerker)
-  const kundeGroups: KundeGroup[] = (() => {
+  // Group empfehlungen by Stelle
+  const kundeGroups: StelleGroup[] = (() => {
     const filtered = search
       ? empfehlungen.filter((e) => {
           const s = search.toLowerCase();
           return (
-            e.kunde_name.toLowerCase().includes(s) ||
+            e.kandidat_name.toLowerCase().includes(s) ||
             e.empfehler_name.toLowerCase().includes(s) ||
             e.ref_code.toLowerCase().includes(s) ||
-            (e.handwerker?.name ?? "").toLowerCase().includes(s)
+            (e.stelle?.title ?? "").toLowerCase().includes(s)
           );
         })
       : empfehlungen;
 
-    const map = new Map<string, KundeGroup>();
+    const map = new Map<string, StelleGroup>();
     for (const emp of filtered) {
-      const key = emp.handwerker?.id ?? emp.handwerker_id;
+      const key = emp.stelle?.id ?? "ohne-stelle";
       if (!map.has(key)) {
         map.set(key, {
-          handwerker: emp.handwerker ?? { id: key, name: emp.kunde_name, email: "", telefon: null, provision_prozent: 0 },
+          stelle: emp.stelle ?? null,
           empfehlungen: [],
         });
       }
       map.get(key)!.empfehlungen.push(emp);
     }
-    return Array.from(map.values()).sort((a, b) => a.handwerker.name.localeCompare(b.handwerker.name));
+    return Array.from(map.values()).sort((a, b) => (a.stelle?.title ?? "").localeCompare(b.stelle?.title ?? ""));
   })();
 
   function toggleKunde(id: string) {
@@ -98,14 +99,14 @@ export default function AdminDashboardPage() {
   }
 
   function expandAll() {
-    setExpandedKunden(new Set(kundeGroups.map((g) => g.handwerker.id)));
+    setExpandedKunden(new Set(kundeGroups.map((g) => g.stelle?.id ?? "ohne-stelle")));
   }
 
   function collapseAll() {
     setExpandedKunden(new Set());
   }
 
-  async function handleMoveStatus(emp: EmpfehlungWithHandwerker) {
+  async function handleMoveStatus(emp: EmpfehlungWithStelle) {
     const next = NEXT_STATUS[emp.status];
     if (!next) return;
 
@@ -125,57 +126,27 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      // If marking as ausgezahlt, also archive the handwerker
-      if (next.target === "ausgezahlt" && emp.handwerker?.id) {
-        await fetch("/api/admin/handwerker", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: emp.handwerker.id, active: false }),
-        });
-      }
-
       fetchData();
     } catch {
       alert("Netzwerkfehler");
     }
   }
 
-  async function handleUpdateBetrag(emp: EmpfehlungWithHandwerker) {
-    const value = parseFloat(editBetrag);
+  async function handleUpdatePraemie(emp: EmpfehlungWithStelle) {
+    const value = parseFloat(editPraemie);
     if (isNaN(value) || value < 0) return;
 
     try {
       const res = await fetch("/api/admin/empfehlungen", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, rechnungsbetrag: value }),
+        body: JSON.stringify({ id: emp.id, praemie_betrag: value }),
       });
       if (!res.ok) {
         alert("Fehler beim Aktualisieren");
         return;
       }
-      setEditingBetragId(null);
-      fetchData();
-    } catch {
-      alert("Netzwerkfehler");
-    }
-  }
-
-  async function handleUpdateProvision(emp: EmpfehlungWithHandwerker) {
-    const value = parseFloat(editProvision);
-    if (isNaN(value) || value < 0) return;
-
-    try {
-      const res = await fetch("/api/admin/empfehlungen", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: emp.id, provision_betrag: value }),
-      });
-      if (!res.ok) {
-        alert("Fehler beim Aktualisieren");
-        return;
-      }
-      setEditingProvisionId(null);
+      setEditingPraemieId(null);
       fetchData();
     } catch {
       alert("Netzwerkfehler");
@@ -185,10 +156,11 @@ export default function AdminDashboardPage() {
   const stats = {
     total: empfehlungen.length,
     offen: empfehlungen.filter((e) => e.status === "offen").length,
-    erledigt: empfehlungen.filter((e) => e.status === "erledigt").length,
-    provision: empfehlungen
-      .filter((e) => e.provision_betrag)
-      .reduce((sum, e) => sum + (e.provision_betrag ?? 0), 0),
+    eingestellt: empfehlungen.filter((e) => e.status === "eingestellt").length,
+    probezeit: empfehlungen.filter((e) => e.status === "probezeit_bestanden").length,
+    praemien: empfehlungen
+      .filter((e) => e.praemie_betrag)
+      .reduce((sum, e) => sum + (e.praemie_betrag ?? 0), 0),
   };
 
   const cellStyle: React.CSSProperties = { padding: "12px 14px" };
@@ -203,8 +175,9 @@ export default function AdminDashboardPage() {
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         <StatCard label="Gesamt" value={stats.total} bgColor="#eff6ff" color="#2563eb" />
         <StatCard label="Offen" value={stats.offen} bgColor="#fff7ed" color="#ea580c" />
-        <StatCard label="Erledigt" value={stats.erledigt} bgColor="#f0fdf4" color="#16a34a" />
-        <StatCard label="Provision" value={formatCurrency(stats.provision)} bgColor="#f5f3ff" color="#7c3aed" />
+        <StatCard label="Eingestellt" value={stats.eingestellt} bgColor="#f0fdf4" color="#16a34a" />
+        <StatCard label="Probezeit" value={stats.probezeit} bgColor="#eff6ff" color="#2563eb" />
+        <StatCard label="Prämien" value={formatCurrency(stats.praemien)} bgColor="#f5f3ff" color="#7c3aed" />
       </div>
 
       {/* Search + Expand/Collapse */}
@@ -225,7 +198,7 @@ export default function AdminDashboardPage() {
         >
           <Search size={20} color="var(--orange)" />
           <input
-            placeholder="Kunde oder Affiliate suchen..."
+            placeholder="Stelle oder Empfehler suchen..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{
@@ -274,7 +247,7 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Kunde Groups */}
+      {/* Stelle Groups */}
       {loading ? (
         <Card style={{ textAlign: "center", padding: "48px", color: "var(--text-muted)", fontSize: "15px", borderRadius: "20px" }}>
           Laden...
@@ -286,17 +259,19 @@ export default function AdminDashboardPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {kundeGroups.map((group) => {
-            const isExpanded = expandedKunden.has(group.handwerker.id);
-            const affiliateCount = group.empfehlungen.length;
+            const groupId = group.stelle?.id ?? "ohne-stelle";
+            const isExpanded = expandedKunden.has(groupId);
+            const empfehlungCount = group.empfehlungen.length;
             const statusCounts = {
               offen: group.empfehlungen.filter((e) => e.status === "offen").length,
-              erledigt: group.empfehlungen.filter((e) => e.status === "erledigt").length,
+              eingestellt: group.empfehlungen.filter((e) => e.status === "eingestellt").length,
+              probezeit_bestanden: group.empfehlungen.filter((e) => e.status === "probezeit_bestanden").length,
               ausgezahlt: group.empfehlungen.filter((e) => e.status === "ausgezahlt").length,
             };
 
             return (
               <Card
-                key={group.handwerker.id}
+                key={groupId}
                 style={{
                   padding: 0,
                   borderRadius: "20px",
@@ -306,9 +281,9 @@ export default function AdminDashboardPage() {
                   overflow: "hidden",
                 }}
               >
-                {/* Kunde Header */}
+                {/* Group Header */}
                 <button
-                  onClick={() => toggleKunde(group.handwerker.id)}
+                  onClick={() => toggleKunde(groupId)}
                   style={{
                     width: "100%",
                     display: "flex",
@@ -327,7 +302,7 @@ export default function AdminDashboardPage() {
                     {isExpanded ? <ChevronDown size={22} /> : <ChevronRight size={22} />}
                   </div>
 
-                  {/* Kunde avatar */}
+                  {/* Stelle avatar */}
                   <div
                     style={{
                       width: "44px",
@@ -343,31 +318,12 @@ export default function AdminDashboardPage() {
                     <Users size={20} color="white" />
                   </div>
 
-                  {/* Kunde info */}
+                  {/* Stelle info */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "17px", fontWeight: 700, color: "var(--navy)" }}>
-                      {group.handwerker.name}
-                    </div>
-                    <div style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "2px" }}>
-                      {group.handwerker.email}
-                      {group.handwerker.telefon && ` · ${group.handwerker.telefon}`}
+                      {group.stelle?.title ?? "Ohne Stelle"}
                     </div>
                   </div>
-
-                  {/* Provision % badge */}
-                  <span
-                    style={{
-                      background: "linear-gradient(135deg, #f28900, #ff6b00)",
-                      color: "white",
-                      padding: "5px 14px",
-                      borderRadius: "12px",
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {group.handwerker.provision_prozent}%
-                  </span>
 
                   {/* Status dots summary */}
                   <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
@@ -377,10 +333,16 @@ export default function AdminDashboardPage() {
                         {statusCounts.offen}
                       </span>
                     )}
-                    {statusCounts.erledigt > 0 && (
-                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 700, color: STATUS_DOT_COLORS.erledigt }}>
-                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: STATUS_DOT_COLORS.erledigt }} />
-                        {statusCounts.erledigt}
+                    {statusCounts.eingestellt > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 700, color: STATUS_DOT_COLORS.eingestellt }}>
+                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: STATUS_DOT_COLORS.eingestellt }} />
+                        {statusCounts.eingestellt}
+                      </span>
+                    )}
+                    {statusCounts.probezeit_bestanden > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 700, color: STATUS_DOT_COLORS.probezeit_bestanden }}>
+                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: STATUS_DOT_COLORS.probezeit_bestanden }} />
+                        {statusCounts.probezeit_bestanden}
                       </span>
                     )}
                     {statusCounts.ausgezahlt > 0 && (
@@ -391,7 +353,7 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
 
-                  {/* Affiliate count */}
+                  {/* Empfehlung count */}
                   <span
                     style={{
                       fontSize: "13px",
@@ -400,17 +362,17 @@ export default function AdminDashboardPage() {
                       flexShrink: 0,
                     }}
                   >
-                    {affiliateCount} {affiliateCount === 1 ? "Affiliate" : "Affiliates"}
+                    {empfehlungCount} {empfehlungCount === 1 ? "Empfehlung" : "Empfehlungen"}
                   </span>
                 </button>
 
-                {/* Expanded: Affiliate table */}
+                {/* Expanded: Empfehlung table */}
                 {isExpanded && (
                   <div style={{ borderTop: "1px solid var(--border)" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
                       <thead>
                         <tr style={{ background: "linear-gradient(135deg, #050234 0%, #0a0654 100%)" }}>
-                          {["Affiliate", "Ref", "Status", "Betrag", "Provision", "Datum", "Aktion"].map((h) => (
+                          {["Empfehler", "Ref", "Status", "Prämie", "Datum", "Aktion"].map((h) => (
                             <th
                               key={h}
                               style={{
@@ -438,7 +400,7 @@ export default function AdminDashboardPage() {
                               backgroundColor: i % 2 === 0 ? "white" : "#f8f7f4",
                             }}
                           >
-                            {/* Affiliate name + email */}
+                            {/* Empfehler name + email */}
                             <td style={{ ...cellStyle, fontWeight: 600 }}>
                               {emp.empfehler_name}
                               <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: 400 }}>
@@ -469,98 +431,50 @@ export default function AdminDashboardPage() {
                               </span>
                             </td>
 
-                            {/* Betrag (inline editable) */}
+                            {/* Prämie (inline editable) */}
                             <td style={cellStyle}>
-                              {editingBetragId === emp.id ? (
+                              {editingPraemieId === emp.id ? (
                                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                                   <input
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    value={editBetrag}
-                                    onChange={(e) => setEditBetrag(e.target.value)}
-                                    style={{ width: "90px", padding: "6px 8px", border: "2px solid var(--orange)", borderRadius: "8px", fontSize: "13px", fontWeight: 700 }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleUpdateBetrag(emp);
-                                      if (e.key === "Escape") setEditingBetragId(null);
-                                    }}
-                                    autoFocus
-                                  />
-                                  <button onClick={() => handleUpdateBetrag(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
-                                    <Check size={12} color="white" />
-                                  </button>
-                                  <button onClick={() => setEditingBetragId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
-                                    <X size={12} color="var(--text-muted)" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setEditingBetragId(emp.id);
-                                    setEditBetrag(emp.rechnungsbetrag ? String(emp.rechnungsbetrag) : "");
-                                  }}
-                                  style={{
-                                    background: emp.rechnungsbetrag ? "linear-gradient(135deg, #f28900, #ff6b00)" : "var(--border)",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    fontWeight: 700,
-                                    color: emp.rechnungsbetrag ? "white" : "var(--text-muted)",
-                                    padding: "4px 12px",
-                                    borderRadius: "12px",
-                                    fontSize: "12px",
-                                    boxShadow: emp.rechnungsbetrag ? "0 2px 6px rgba(242,137,0,0.3)" : "none",
-                                  }}
-                                  title="Klicke um Betrag einzutragen"
-                                >
-                                  {emp.rechnungsbetrag ? formatCurrency(emp.rechnungsbetrag) : "–"}
-                                </button>
-                              )}
-                            </td>
-
-                            {/* Provision (inline editable) */}
-                            <td style={cellStyle}>
-                              {editingProvisionId === emp.id ? (
-                                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={editProvision}
-                                    onChange={(e) => setEditProvision(e.target.value)}
+                                    value={editPraemie}
+                                    onChange={(e) => setEditPraemie(e.target.value)}
                                     style={{ width: "90px", padding: "6px 8px", border: "2px solid var(--green)", borderRadius: "8px", fontSize: "13px", fontWeight: 700 }}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleUpdateProvision(emp);
-                                      if (e.key === "Escape") setEditingProvisionId(null);
+                                      if (e.key === "Enter") handleUpdatePraemie(emp);
+                                      if (e.key === "Escape") setEditingPraemieId(null);
                                     }}
                                     autoFocus
                                   />
-                                  <button onClick={() => handleUpdateProvision(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
+                                  <button onClick={() => handleUpdatePraemie(emp)} style={{ background: "#16a34a", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
                                     <Check size={12} color="white" />
                                   </button>
-                                  <button onClick={() => setEditingProvisionId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
+                                  <button onClick={() => setEditingPraemieId(null)} style={{ background: "var(--border)", border: "none", borderRadius: "6px", padding: "4px", cursor: "pointer", display: "flex" }}>
                                     <X size={12} color="var(--text-muted)" />
                                   </button>
                                 </div>
                               ) : (
                                 <button
                                   onClick={() => {
-                                    setEditingProvisionId(emp.id);
-                                    setEditProvision(emp.provision_betrag ? String(emp.provision_betrag) : "");
+                                    setEditingPraemieId(emp.id);
+                                    setEditPraemie(emp.praemie_betrag ? String(emp.praemie_betrag) : "");
                                   }}
                                   style={{
-                                    background: emp.provision_betrag ? "#16a34a" : "var(--border)",
+                                    background: emp.praemie_betrag ? "#16a34a" : "var(--border)",
                                     border: "none",
                                     cursor: "pointer",
                                     fontWeight: 700,
-                                    color: emp.provision_betrag ? "white" : "var(--text-muted)",
+                                    color: emp.praemie_betrag ? "white" : "var(--text-muted)",
                                     padding: "4px 12px",
                                     borderRadius: "12px",
                                     fontSize: "12px",
-                                    boxShadow: emp.provision_betrag ? "0 2px 6px rgba(22,163,74,0.3)" : "none",
+                                    boxShadow: emp.praemie_betrag ? "0 2px 6px rgba(22,163,74,0.3)" : "none",
                                   }}
-                                  title="Klicke um Provision anzupassen"
+                                  title="Klicke um Prämie anzupassen"
                                 >
-                                  {emp.provision_betrag ? formatCurrency(emp.provision_betrag) : "–"}
+                                  {emp.praemie_betrag ? formatCurrency(emp.praemie_betrag) : "–"}
                                 </button>
                               )}
                             </td>

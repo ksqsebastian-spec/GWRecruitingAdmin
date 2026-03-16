@@ -7,7 +7,7 @@ interface AusgezahltParams {
   empfehlerName: string;
   empfehlerEmail: string;
   refCode: string;
-  provisionBetrag: number;
+  praemieBetrag: number;
 }
 
 function formatCurrency(amount: number): string {
@@ -18,12 +18,11 @@ function formatCurrency(amount: number): string {
 }
 
 export function generateAusgezahltEmail(params: AusgezahltParams) {
-  // PRIVACY: Only show commission amount, never invoice total or percentage
   return {
-    subject: "Deine Provision wurde ausgezahlt",
+    subject: "Deine Prämie wurde ausgezahlt",
     body: `Hey ${params.empfehlerName},
 
-deine Provision für die Empfehlung (Ref: ${params.refCode}) in Höhe von ${formatCurrency(params.provisionBetrag)} wurde soeben überwiesen.
+deine Prämie für die Empfehlung (Ref: ${params.refCode}) in Höhe von ${formatCurrency(params.praemieBetrag)} wurde soeben überwiesen.
 
 Danke fürs Empfehlen!
 

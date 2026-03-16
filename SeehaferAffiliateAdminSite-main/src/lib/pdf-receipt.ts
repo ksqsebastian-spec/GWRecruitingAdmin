@@ -1,9 +1,9 @@
 import { jsPDF } from "jspdf";
 import { COMPANY } from "./company";
-import type { EmpfehlungWithHandwerker } from "@/types";
+import type { EmpfehlungWithStelle } from "@/types";
 
 interface ReceiptData {
-  empfehlung: EmpfehlungWithHandwerker;
+  empfehlung: EmpfehlungWithStelle;
   emailSubject: string;
   emailBody: string;
 }
@@ -123,10 +123,9 @@ export function generateReceipt({ empfehlung, emailSubject, emailBody }: Receipt
   doc.setFontSize(10);
 
   const transactionFields = [
-    ["Kunde (Partner)", empfehlung.handwerker?.name ?? empfehlung.kunde_name],
-    ["Rechnungsbetrag", empfehlung.rechnungsbetrag ? formatCurrencyPlain(empfehlung.rechnungsbetrag) : "–"],
-    ["Provisionssatz", empfehlung.handwerker?.provision_prozent ? `${empfehlung.handwerker.provision_prozent}%` : "–"],
-    ["Provisionsbetrag", empfehlung.provision_betrag ? formatCurrencyPlain(empfehlung.provision_betrag) : "–"],
+    ["Stelle", empfehlung.stelle?.title ?? "–"],
+    ["Kandidat", empfehlung.kandidat_name],
+    ["Prämienbetrag", empfehlung.praemie_betrag ? formatCurrencyPlain(empfehlung.praemie_betrag) : "–"],
     ...(empfehlung.ausgezahlt_am ? [["Ausgezahlt am", formatDatePlain(empfehlung.ausgezahlt_am)]] : []),
   ];
 
@@ -140,8 +139,8 @@ export function generateReceipt({ empfehlung, emailSubject, emailBody }: Receipt
     y += 6;
   }
 
-  // Highlight provision amount
-  if (empfehlung.provision_betrag) {
+  // Highlight praemie amount
+  if (empfehlung.praemie_betrag) {
     y += 4;
     doc.setFillColor(242, 137, 0); // orange
     doc.roundedRect(margin, y - 1, contentWidth, 12, 3, 3, "F");
@@ -149,7 +148,7 @@ export function generateReceipt({ empfehlung, emailSubject, emailBody }: Receipt
     doc.setFont("helvetica", "bold");
     doc.setTextColor(255, 255, 255);
     doc.text(
-      `Auszahlungsbetrag: ${formatCurrencyPlain(empfehlung.provision_betrag)}`,
+      `Auszahlungsbetrag: ${formatCurrencyPlain(empfehlung.praemie_betrag)}`,
       margin + 6,
       y + 7,
     );

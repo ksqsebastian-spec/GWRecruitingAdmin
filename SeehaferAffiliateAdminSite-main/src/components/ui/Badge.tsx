@@ -7,8 +7,9 @@ interface BadgeProps {
 
 const statusStyles: Record<EmpfehlungStatus, { bg: string; color: string; shadow: string }> = {
   offen: { bg: "#ea580c", color: "white", shadow: "rgba(234,88,12,0.3)" },
-  erledigt: { bg: "#16a34a", color: "white", shadow: "rgba(22,163,74,0.3)" },
-  ausgezahlt: { bg: "#2563eb", color: "white", shadow: "rgba(37,99,235,0.3)" },
+  eingestellt: { bg: "#16a34a", color: "white", shadow: "rgba(22,163,74,0.3)" },
+  probezeit_bestanden: { bg: "#2563eb", color: "white", shadow: "rgba(37,99,235,0.3)" },
+  ausgezahlt: { bg: "#7C3AED", color: "white", shadow: "rgba(124,58,237,0.3)" },
 };
 
 export function Badge({ status }: BadgeProps) {

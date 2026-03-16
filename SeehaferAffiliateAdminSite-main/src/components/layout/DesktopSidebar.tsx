@@ -1,12 +1,12 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Mail, FileText, CreditCard, Archive } from "lucide-react";
+import { LayoutDashboard, Briefcase, Mail, FileText, CreditCard, Archive } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/handwerker", label: "Kunde", icon: Users },
-  { href: "/admin/empfehlungen", label: "Affiliate", icon: FileText },
+  { href: "/admin/stellen", label: "Stellen", icon: Briefcase },
+  { href: "/admin/empfehlungen", label: "Empfehlungen", icon: FileText },
   { href: "/admin/auszahlung", label: "Auszahlung", icon: CreditCard },
   { href: "/admin/archiv", label: "Archiv", icon: Archive },
   { href: "/admin/emails", label: "E-Mails", icon: Mail },
@@ -36,7 +36,7 @@ export function DesktopSidebar() {
         }}
       >
         <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--orange)", letterSpacing: "-0.3px", lineHeight: 1.2 }}>
-          SeehaferAffiliate
+          SeehaferRecruiting
         </div>
         <div style={{ fontSize: "13px", fontWeight: 600, color: "rgba(255,255,255,0.85)", marginTop: "4px", letterSpacing: "1.5px", textTransform: "uppercase" }}>
           admin

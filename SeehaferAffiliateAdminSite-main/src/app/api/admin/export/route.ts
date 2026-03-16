@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const VALID_STATUSES = ["offen", "eingestellt", "probezeit_bestanden", "ausgezahlt"] as const;
+
 // GET /api/admin/export — CSV export of all empfehlungen
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -10,10 +12,10 @@ export async function GET(request: NextRequest) {
 
   let query = adminClient
     .from("empfehlungen")
-    .select("*, handwerker:handwerker_id(name)")
+    .select("*, stelle:stelle_id(title)")
     .order("created_at", { ascending: false });
 
-  if (status && ["offen", "erledigt", "ausgezahlt"].includes(status)) {
+  if (status && VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
     query = query.eq("status", status);
   }
 
@@ -29,30 +31,30 @@ export async function GET(request: NextRequest) {
   // Build CSV
   const headers = [
     "Ref-Code",
-    "Kunde",
-    "Kunde Kontakt",
+    "Kandidat",
+    "Kandidat Kontakt",
     "Empfehler",
     "Empfehler Email",
-    "Handwerker",
+    "Stelle",
+    "Position",
     "Status",
-    "Rechnungsbetrag",
-    "Provision",
+    "Prämie",
     "Ausgezahlt am",
     "Erstellt am",
   ];
 
   const rows = (data || []).map((row) => {
-    const hw = row.handwerker as { name: string } | null;
+    const stelle = row.stelle as { title: string } | null;
     return [
       row.ref_code,
-      row.kunde_name,
-      row.kunde_kontakt || "",
+      row.kandidat_name,
+      row.kandidat_kontakt || "",
       row.empfehler_name,
       row.empfehler_email,
-      hw?.name || "",
+      stelle?.title || "",
+      row.position || "",
       row.status,
-      row.rechnungsbetrag ?? "",
-      row.provision_betrag ?? "",
+      row.praemie_betrag ?? "",
       row.ausgezahlt_am || "",
       row.created_at,
     ];

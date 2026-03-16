@@ -1,13 +1,5 @@
 import type { EmpfehlungStatus } from "@/types";
 
-export function berechneProvision(
-  rechnungsbetrag: number,
-  prozentsatz: number
-): number {
-  const provision = rechnungsbetrag * (prozentsatz / 100);
-  return Math.round(provision * 100) / 100;
-}
-
 export function getInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -53,17 +45,23 @@ export function getStatusColor(status: EmpfehlungStatus) {
         text: "var(--orange)",
         border: "var(--orange)",
       };
-    case "erledigt":
+    case "eingestellt":
       return {
         bg: "var(--green-bg)",
         text: "var(--green)",
         border: "var(--green)",
       };
-    case "ausgezahlt":
+    case "probezeit_bestanden":
       return {
         bg: "var(--blue-bg)",
         text: "var(--blue)",
         border: "var(--blue)",
+      };
+    case "ausgezahlt":
+      return {
+        bg: "#F3F0FF",
+        text: "#7C3AED",
+        border: "#7C3AED",
       };
   }
 }
@@ -72,8 +70,10 @@ export function getStatusLabel(status: EmpfehlungStatus): string {
   switch (status) {
     case "offen":
       return "OFFEN";
-    case "erledigt":
-      return "ERLEDIGT";
+    case "eingestellt":
+      return "EINGESTELLT";
+    case "probezeit_bestanden":
+      return "PROBEZEIT BESTANDEN";
     case "ausgezahlt":
       return "AUSGEZAHLT";
   }

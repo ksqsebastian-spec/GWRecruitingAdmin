@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { empfehlungCreateSchema } from "@/lib/validators";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
-import { berechneProvision } from "@/lib/utils";
 
-const VALID_STATUSES = ["offen", "erledigt", "ausgezahlt"] as const;
+const VALID_STATUSES = ["offen", "eingestellt", "probezeit_bestanden", "ausgezahlt"] as const;
 
 // POST /api/admin/empfehlungen — create new empfehlung (admin)
 export async function POST(request: NextRequest) {
@@ -38,13 +37,22 @@ export async function POST(request: NextRequest) {
     refCode = generated as string;
   }
 
+  // Fetch global default praemie
+  const { data: settings } = await adminClient
+    .from("app_settings")
+    .select("value")
+    .eq("key", "praemie_betrag_default")
+    .single();
+  const praemieBetrag = Number(settings?.value ?? 1000);
+
   const { data, error } = await adminClient
     .from("empfehlungen")
     .insert({
       ...parsed.data,
       ref_code: refCode,
+      praemie_betrag: praemieBetrag,
     })
-    .select("*, handwerker:handwerker_id(id, name, email, telefon, provision_prozent)")
+    .select("*, stelle:stelle_id(id, title)")
     .single();
 
   if (error) {
@@ -59,7 +67,7 @@ export async function POST(request: NextRequest) {
     action: "empfehlung.created",
     targetType: "empfehlung",
     targetId: data.id,
-    details: { kunde_name: parsed.data.kunde_name, ref_code: refCode },
+    details: { kandidat_name: parsed.data.kandidat_name, ref_code: refCode },
     ipAddress: request.headers.get("x-forwarded-for"),
   });
 
@@ -81,17 +89,17 @@ export async function PATCH(request: NextRequest) {
   const {
     id,
     status,
-    rechnungsbetrag,
     empfehler_name,
     empfehler_email,
-    kunde_name,
-    kunde_kontakt,
-    handwerker_id,
+    kandidat_name,
+    kandidat_kontakt,
+    stelle_id,
+    position,
     iban,
     bic,
     kontoinhaber,
     bank_name,
-    provision_betrag: directProvisionBetrag,
+    praemie_betrag,
   } = body as Record<string, unknown>;
 
   if (!id || typeof id !== "string") {
@@ -103,10 +111,10 @@ export async function PATCH(request: NextRequest) {
 
   const adminClient = createAdminClient();
 
-  // Get current empfehlung for audit + provision calc (non-blocking)
+  // Get current empfehlung for audit
   const { data: before } = await adminClient
     .from("empfehlungen")
-    .select("status, rechnungsbetrag, handwerker:handwerker_id(provision_prozent)")
+    .select("status")
     .eq("id", id)
     .single();
 
@@ -130,36 +138,21 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // Betrag update — recalculate provision
-  if (rechnungsbetrag !== undefined) {
-    const betrag = Number(rechnungsbetrag);
-    if (isNaN(betrag) || betrag < 0) {
-      return NextResponse.json(
-        { error: "Ungültiger Betrag" },
-        { status: 400 }
-      );
-    }
-    updateData.rechnungsbetrag = betrag;
-
-    const hw = before?.handwerker as unknown as { provision_prozent: number } | null;
-    const provisionProzent = hw?.provision_prozent ?? 5;
-    updateData.provision_betrag = berechneProvision(betrag, provisionProzent);
-  }
-
-  // Direct provision_betrag update (for Auszahlung page adjustments)
-  if (directProvisionBetrag !== undefined && rechnungsbetrag === undefined) {
-    const betrag = Number(directProvisionBetrag);
+  // Praemie update (direct override)
+  if (praemie_betrag !== undefined) {
+    const betrag = Number(praemie_betrag);
     if (!isNaN(betrag) && betrag >= 0) {
-      updateData.provision_betrag = betrag;
+      updateData.praemie_betrag = betrag;
     }
   }
 
   // Text field updates
   if (empfehler_name !== undefined) updateData.empfehler_name = empfehler_name;
   if (empfehler_email !== undefined) updateData.empfehler_email = empfehler_email;
-  if (kunde_name !== undefined) updateData.kunde_name = kunde_name;
-  if (kunde_kontakt !== undefined) updateData.kunde_kontakt = kunde_kontakt;
-  if (handwerker_id !== undefined) updateData.handwerker_id = handwerker_id;
+  if (kandidat_name !== undefined) updateData.kandidat_name = kandidat_name;
+  if (kandidat_kontakt !== undefined) updateData.kandidat_kontakt = kandidat_kontakt;
+  if (stelle_id !== undefined) updateData.stelle_id = stelle_id;
+  if (position !== undefined) updateData.position = position;
 
   // Bankdaten fields
   if (iban !== undefined) updateData.iban = iban;
@@ -211,7 +204,7 @@ export async function DELETE(request: NextRequest) {
 
   const { data: emp } = await adminClient
     .from("empfehlungen")
-    .select("kunde_name, ref_code")
+    .select("kandidat_name, ref_code")
     .eq("id", id)
     .single();
 
@@ -232,7 +225,7 @@ export async function DELETE(request: NextRequest) {
     action: "empfehlung.deleted",
     targetType: "empfehlung",
     targetId: id,
-    details: { kunde_name: emp?.kunde_name, ref_code: emp?.ref_code },
+    details: { kandidat_name: emp?.kandidat_name, ref_code: emp?.ref_code },
     ipAddress: request.headers.get("x-forwarded-for"),
   });
 

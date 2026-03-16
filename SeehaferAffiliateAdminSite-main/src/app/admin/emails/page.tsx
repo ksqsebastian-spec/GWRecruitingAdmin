@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Copy, Check, Mail, User, ArrowRight, FileDown } from "lucide-react";
-import type { EmpfehlungWithHandwerker } from "@/types";
+import type { EmpfehlungWithStelle } from "@/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatCurrency } from "@/lib/utils";
@@ -13,19 +13,19 @@ import {
 import { generateReceipt } from "@/lib/pdf-receipt";
 
 export default function EmailConfiguratorPage() {
-  const [empfehlungen, setAffiliateen] = useState<EmpfehlungWithHandwerker[]>([]);
+  const [empfehlungen, setEmpfehlungen] = useState<EmpfehlungWithStelle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string>("");
   const [copied, setCopied] = useState<"subject" | "body" | "all" | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/handwerker?view=empfehlungen&pageSize=100");
+      const res = await fetch("/api/admin/stellen?view=empfehlungen&pageSize=100");
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setAffiliateen(data.data || []);
+      setEmpfehlungen(data.data || []);
     } catch {
-      setAffiliateen([]);
+      setEmpfehlungen([]);
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export default function EmailConfiguratorPage() {
         empfehlerName: selected.empfehler_name,
         empfehlerEmail: selected.empfehler_email,
         refCode: selected.ref_code,
-        provisionBetrag: selected.provision_betrag ?? 0,
+        praemieBetrag: selected.praemie_betrag ?? 0,
       })
     : null;
 
@@ -78,14 +78,14 @@ export default function EmailConfiguratorPage() {
           E-Mail Konfigurator
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: "15px", margin: "10px 0 0 0", lineHeight: 1.6 }}>
-          Wähle eine Affiliate, um die Auszahlungs-E-Mail zu generieren.
+          Wähle eine Empfehlung, um die Auszahlungs-E-Mail zu generieren.
         </p>
       </div>
 
-      {/* Affiliate cards */}
+      {/* Empfehlung cards */}
       <div>
         <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--orange)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "14px" }}>
-          Affiliate auswählen
+          Empfehlung auswählen
         </div>
 
         {loading ? (
@@ -94,7 +94,7 @@ export default function EmailConfiguratorPage() {
           </Card>
         ) : empfehlungen.length === 0 ? (
           <Card style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", borderRadius: "20px" }}>
-            Keine Affiliateen vorhanden.
+            Keine Empfehlungen vorhanden.
           </Card>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -140,16 +140,16 @@ export default function EmailConfiguratorPage() {
                       </span>
                       <ArrowRight size={14} color="var(--text-muted)" />
                       <span style={{ fontSize: "14px", color: "var(--text-muted)" }}>
-                        {emp.kunde_name}
+                        {emp.stelle?.title ?? emp.kandidat_name}
                       </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
                       <span style={{ fontFamily: "monospace", fontSize: "12px", color: "var(--blue)", fontWeight: 700, background: "var(--blue-bg)", padding: "2px 8px", borderRadius: "6px" }}>
                         {emp.ref_code}
                       </span>
-                      {emp.provision_betrag && (
+                      {emp.praemie_betrag && (
                         <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--green)" }}>
-                          {formatCurrency(emp.provision_betrag)}
+                          {formatCurrency(emp.praemie_betrag)}
                         </span>
                       )}
                     </div>
@@ -309,7 +309,7 @@ export default function EmailConfiguratorPage() {
           }}
         >
           <Mail size={40} color="var(--orange)" style={{ marginBottom: "16px" }} />
-          <div>Wähle oben eine Affiliate aus, um die E-Mail zu generieren.</div>
+          <div>Wähle oben eine Empfehlung aus, um die E-Mail zu generieren.</div>
         </Card>
       )}
     </div>

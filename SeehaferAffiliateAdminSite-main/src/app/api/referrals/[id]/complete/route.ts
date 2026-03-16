@@ -1,65 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
-import { empfehlungCompleteSchema } from "@/lib/validators";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { berechneProvision } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
 
-// POST /api/referrals/[id]/complete — mark empfehlung as erledigt
+// POST /api/referrals/[id]/complete — mark empfehlung as eingestellt
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Ungültiger Request-Body" },
-      { status: 400 }
-    );
-  }
-
-  const parsed = empfehlungCompleteSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Validierungsfehler", details: parsed.error.format() },
-      { status: 400 }
-    );
-  }
-
   const adminClient = createAdminClient();
 
   // Fetch the empfehlung (must be 'offen')
   const { data: empfehlung, error: fetchError } = await adminClient
     .from("empfehlungen")
-    .select("*, handwerker:handwerker_id(provision_prozent)")
+    .select("*")
     .eq("id", id)
     .eq("status", "offen")
     .single();
 
   if (fetchError || !empfehlung) {
     return NextResponse.json(
-      { error: "Empfehlung nicht gefunden oder bereits erledigt" },
+      { error: "Empfehlung nicht gefunden oder bereits bearbeitet" },
       { status: 404 }
     );
   }
 
-  const provisionProzent =
-    (empfehlung.handwerker as { provision_prozent: number })?.provision_prozent ?? 5;
-  const provisionBetrag = berechneProvision(
-    parsed.data.rechnungsbetrag,
-    provisionProzent
-  );
+  // Use existing praemie_betrag (set at creation from global default)
+  // or allow override via request body
+  let praemieBetrag = empfehlung.praemie_betrag;
+  try {
+    const body = await request.json();
+    if (body?.praemie_betrag !== undefined) {
+      const betrag = Number(body.praemie_betrag);
+      if (!isNaN(betrag) && betrag >= 0) {
+        praemieBetrag = betrag;
+      }
+    }
+  } catch {
+    // No body is fine — use existing praemie_betrag
+  }
 
-  // Update status
+  // Update status to eingestellt
   const { data: updated, error: updateError } = await adminClient
     .from("empfehlungen")
     .update({
-      status: "erledigt",
-      rechnungsbetrag: parsed.data.rechnungsbetrag,
-      provision_betrag: provisionBetrag,
+      status: "eingestellt",
+      praemie_betrag: praemieBetrag,
     })
     .eq("id", id)
     .select()
@@ -72,15 +59,13 @@ export async function POST(
     );
   }
 
-  // Audit log
   await logAudit({
     userId: "admin",
-    action: "empfehlung.completed",
+    action: "empfehlung.eingestellt",
     targetType: "empfehlung",
     targetId: id,
     details: {
-      rechnungsbetrag: parsed.data.rechnungsbetrag,
-      provision_betrag: provisionBetrag,
+      praemie_betrag: praemieBetrag,
     },
     ipAddress: request.headers.get("x-forwarded-for"),
   });
